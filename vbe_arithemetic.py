@@ -1,67 +1,49 @@
 from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit
 
-def cbarrier(circ, barrier):
-    if barrier:
-        circ.barrier()
 
-
-def sum(circ, cin, a, b, barrier=False):
+def sum(circ, cin, a, b):
     circ.cx(a, b)
-    cbarrier(circ, barrier)
     circ.cx(cin, b)
-    cbarrier(circ, barrier)
 
 
-def sum_dg(circ, cin, a, b, barrier=False):
+def sum_dg(circ, cin, a, b):
     circ.cx(cin, b)
-    cbarrier(circ, barrier)
     circ.cx(a, b)
-    cbarrier(circ, barrier)
 
 
-def carry(circ, cin, a, b, cout, barrier=False):
+def carry(circ, cin, a, b, cout):
     circ.ccx(a, b, cout)
-    cbarrier(circ, barrier)
     circ.cx(a, b)
-    cbarrier(circ, barrier)
     circ.ccx(cin, b, cout)
-    cbarrier(circ, barrier)
 
 
-def carry_dg(circ, cin, a, b, cout, barrier=False):
+def carry_dg(circ, cin, a, b, cout):
     circ.ccx(cin, b, cout)
-    cbarrier(circ, barrier)
     circ.cx(a, b)
-    cbarrier(circ, barrier)
     circ.ccx(a, b, cout)
-    cbarrier(circ, barrier)
 
 
-creg = 0
-
-
-def ripple_add(circ: QuantumCircuit, a, b, c, N, barrier=False):
+def ripple_add(circ: QuantumCircuit, a, b, c, N):
     # Step 1: Compute the most significant bit of the result a+b
     # To achieve this, we achieve all the carries Ci through the relation :
     # C(i+1) <-- Ai AND Bi AND Ci
     for i in range(0, N-1):
-        carry(circ, c[i], a[i], b[i], c[i+1], barrier)
+        carry(circ, c[i], a[i], b[i], c[i+1])
 
     # The last carry contains the first (leftmost) bit of the result a+b
     # As a result, this carry should be considered in the result
     # We store this carry in b[N]
-    carry(circ, c[N-1], a[N-1], b[N-1], b[N], barrier)
+    carry(circ, c[N-1], a[N-1], b[N-1], b[N])
 
     # Calculate the second-to-leftmost bit of the sum.
     circ.cx(a[N - 1], b[N - 1])
-    cbarrier(circ, barrier)
 
     sum(circ, c[N-1], a[N-1], b[N-1])
 
     # Invert the carries and calculate the remaining sums.
     for i in range(N - 2, -1, -1):
-        carry_dg(circ, c[i], a[i], b[i], c[i + 1], barrier)
-        sum(circ, c[i], a[i], b[i], barrier)
+        carry_dg(circ, c[i], a[i], b[i], c[i + 1])
+        sum(circ, c[i], a[i], b[i])
 
     # Optimization
     # Reset the carry register for reuse
@@ -69,20 +51,19 @@ def ripple_add(circ: QuantumCircuit, a, b, c, N, barrier=False):
         circ.reset(c[i])
 
 
-def ripple_add_dg(circ: QuantumCircuit, a, b, c, N, barrier=False):
+def ripple_add_dg(circ: QuantumCircuit, a, b, c, N):
     for i in range(0, N-1):
-        sum_dg(circ, c[i], a[i], b[i], barrier)
-        carry(circ, c[i], a[i], b[i], c[i + 1], barrier)
+        sum_dg(circ, c[i], a[i], b[i])
+        carry(circ, c[i], a[i], b[i], c[i + 1])
 
     sum_dg(circ, c[N - 1], a[N - 1], b[N - 1])
 
     circ.cx(a[N - 1], b[N - 1])
-    cbarrier(circ, barrier)
 
-    carry_dg(circ, c[N-1], a[N - 1], b[N - 1], b[N], barrier)
+    carry_dg(circ, c[N-1], a[N - 1], b[N - 1], b[N])
 
     for i in range(N - 2, -1, -1):
-        carry_dg(circ, c[i], a[i], b[i], c[i + 1], barrier)
+        carry_dg(circ, c[i], a[i], b[i], c[i + 1])
 
     # Optimization
     # Reset the carry register for reuse
@@ -90,9 +71,9 @@ def ripple_add_dg(circ: QuantumCircuit, a, b, c, N, barrier=False):
         circ.reset(c[i])
 
 
-def ripple_add_modulo_n(qc, bit_count, a, b, c, mod, of, t, barrier=False):
-    ripple_add(qc, a, b, c, bit_count, barrier)
-    ripple_add_dg(qc, mod, b, c, bit_count, barrier)
+def ripple_add_modulo_n(qc, bit_count, a, b, c, mod, of, t):
+    ripple_add(qc, a, b, c, bit_count)
+    ripple_add_dg(qc, mod, b, c, bit_count)
 
     # The MSB of |b> indicates whether an overflow occurred in the subtraction process
     qc.x(b[bit_count])
@@ -106,7 +87,7 @@ def ripple_add_modulo_n(qc, bit_count, a, b, c, mod, of, t, barrier=False):
         qc.cx(mod[i], t[i])
         qc.ccx(of[0], t[i], mod[i])
 
-    ripple_add(qc, mod, b, c, bit_count, barrier)
+    ripple_add(qc, mod, b, c, bit_count)
 
     # Copy back the value of the temporary register to the first register,
     # Then reset the temporary register to |0> based on the state of overflow qbit
@@ -114,11 +95,11 @@ def ripple_add_modulo_n(qc, bit_count, a, b, c, mod, of, t, barrier=False):
         qc.ccx(of[0], t[i], mod[i])
         qc.cx(mod[i], t[i])
 
-    ripple_add_dg(qc, a, b, c, bit_count, barrier)
+    ripple_add_dg(qc, a, b, c, bit_count)
 
     qc.cx(b[bit_count], of[0])
 
-    ripple_add(qc, a, b, c, bit_count, barrier)
+    ripple_add(qc, a, b, c, bit_count)
 
     # Optimization
     # Reset the temporary register so it can be reused
@@ -126,9 +107,9 @@ def ripple_add_modulo_n(qc, bit_count, a, b, c, mod, of, t, barrier=False):
         qc.reset(t[i])
 
 
-def ripple_add_modulo_n_dg(qc, bit_count, a, b, c, mod, of, t, barrier=False):
-    ripple_add_dg(qc, a, b, c, bit_count, barrier)
-    ripple_add(qc, mod, b, c, bit_count, barrier)
+def ripple_add_modulo_n_dg(qc, bit_count, a, b, c, mod, of, t):
+    ripple_add_dg(qc, a, b, c, bit_count)
+    ripple_add(qc, mod, b, c, bit_count)
 
     qc.x(b[bit_count])
     qc.cx(b[bit_count], of[0])
@@ -139,18 +120,18 @@ def ripple_add_modulo_n_dg(qc, bit_count, a, b, c, mod, of, t, barrier=False):
         qc.ccx(of[0], t[i], mod[i])
         qc.cx(mod[i], t[i])
 
-    ripple_add_dg(qc, mod, b, c, bit_count, barrier)
+    ripple_add_dg(qc, mod, b, c, bit_count)
 
     # Set the first operand to state |0>, if overflow is set
     for i in range(bit_count):
         qc.cx(mod[i], t[i])
         qc.ccx(of[0], t[i], mod[i])
 
-    ripple_add(qc, a, b, c, bit_count, barrier)
+    ripple_add(qc, a, b, c, bit_count)
 
     qc.cx(b[bit_count], of[0])
 
-    ripple_add_dg(qc, a, b, c, bit_count, barrier)
+    ripple_add_dg(qc, a, b, c, bit_count)
 
     # Optimization
     # Reset the temporary register so it can be reused
