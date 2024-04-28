@@ -23,31 +23,31 @@ def carry_dg(circ, cin, a, b, cout):
     circ.ccx(a, b, cout)
 
 
-def ripple_add(circ: QuantumCircuit, a, b, c, N):
+def ripple_add(circ: QuantumCircuit, a, b, c, n):
     # Step 1: Compute the most significant bit of the result a+b
     # To achieve this, we achieve all the carries Ci through the relation :
     # C(i+1) <-- Ai AND Bi AND Ci
-    for i in range(0, N-1):
+    for i in range(0, n - 1):
         carry(circ, c[i], a[i], b[i], c[i+1])
 
     # The last carry contains the first (leftmost) bit of the result a+b
     # As a result, this carry should be considered in the result
     # We store this carry in b[N]
-    carry(circ, c[N-1], a[N-1], b[N-1], b[N])
+    carry(circ, c[n - 1], a[n - 1], b[n - 1], b[n])
 
     # Calculate the second-to-leftmost bit of the sum.
-    circ.cx(a[N - 1], b[N - 1])
+    circ.cx(a[n - 1], b[n - 1])
 
-    sum(circ, c[N-1], a[N-1], b[N-1])
+    sum(circ, c[n - 1], a[n - 1], b[n - 1])
 
     # Invert the carries and calculate the remaining sums.
-    for i in range(N - 2, -1, -1):
+    for i in range(n - 2, -1, -1):
         carry_dg(circ, c[i], a[i], b[i], c[i + 1])
         sum(circ, c[i], a[i], b[i])
 
     # Optimization
     # Reset the carry register for reuse
-    for i in range(0, N):
+    for i in range(0, n):
         circ.reset(c[i])
 
 
@@ -95,11 +95,13 @@ def ripple_add_modulo_n(qc, bit_count, a, b, c, mod, of, t):
         qc.ccx(of[0], t[i], mod[i])
         qc.cx(mod[i], t[i])
 
-    ripple_add_dg(qc, a, b, c, bit_count)
+    # ripple_add_dg(qc, a, b, c, bit_count)
+    #
+    # qc.cx(b[bit_count], of[0])
+    #
+    # ripple_add(qc, a, b, c, bit_count)
 
-    qc.cx(b[bit_count], of[0])
-
-    ripple_add(qc, a, b, c, bit_count)
+    qc.reset(of[0])
 
     # Optimization
     # Reset the temporary register so it can be reused
